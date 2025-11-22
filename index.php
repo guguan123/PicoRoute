@@ -85,7 +85,7 @@ $routes = [
  * 文件路由：自动注册为闭包
  */
 $realpath = realpath($rootDir . $uri);
-if (empty($routes[$uri]) && $realpath !== false && is_file($realpath)) {
+if (empty($routes[$uri]) && $realpath !== false && is_file($realpath) && strtolower(pathinfo($realpath, PATHINFO_EXTENSION)) !== 'php') {
 	$routes[$uri] = fn() => (function() use ($realpath) {
 		$res = new Response();
 		$size = filesize($realpath);
