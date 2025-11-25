@@ -75,7 +75,7 @@ $routes = [
 		$res = new Response();
 		$res->header('Content-Type: application/json; charset=utf-8');
 		$res->cache(0);
-		$res->body = json_encode(array('status' => 'ok', 'time' => time()));
+		$res->body = json_encode(array('status' => 'ok', 'ts' => (new DateTimeImmutable('now', new DateTimeZone('UTC')))->format('c')));
 		return $res;
 	})()
 ];
