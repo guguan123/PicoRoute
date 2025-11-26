@@ -74,6 +74,8 @@ $routes = [
 	'/health' => fn() => (function() {
 		$res = new Response();
 		$res->header('Content-Type: application/json; charset=utf-8');
+		$res->header('Access-Control-Allow-Origin: *');
+		$res->header('Access-Control-Allow-Methods: GET');
 		$res->cache(0);
 		$res->body = json_encode(array('status' => 'ok', 'ts' => (new DateTimeImmutable)->format('c')));
 		return $res;
