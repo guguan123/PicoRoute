@@ -94,7 +94,7 @@ if (empty($routes[$uri]) && $realpath !== false && is_file($realpath) && strtolo
 		$mtime = filemtime($realpath);
 		$etag = '"' . md5($realpath . $mtime) . '"';
 
-		$res->header('Content-Type: ' . mime_content_type($realpath));
+		$res->header('Content-Type: ' . ((new finfo(FILEINFO_MIME_TYPE))->file($realpath) ?: 'application/octet-stream'));
 		$res->header('Content-Length: ' . $size);
 		$res->header('Last-Modified: ' . gmdate('D, d M Y H:i:s', $mtime) . ' GMT');
 		$res->header('ETag: ' . $etag);
