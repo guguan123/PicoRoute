@@ -16,6 +16,14 @@ RewriteRule . /index.php [L]
 $requestUri = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
 $rootDir = __DIR__;
 
+try {
+	//$dbh = new \PDO('mysql:host=localhost;dbname=database_name', 'user_name', 'Password123', [\PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION]);
+} catch (\PDOException $e) {
+	error_log(" [Database Error] " . $e->getMessage());
+	http_response_code(503);
+	die("Database Error");
+}
+
 // 如果请求路径以脚本名开头，则去除脚本名部分
 if (strpos($requestUri, $_SERVER['SCRIPT_NAME']) === 0) {
 	if ($requestUri == $_SERVER['SCRIPT_NAME']) {
@@ -26,6 +34,48 @@ if (strpos($requestUri, $_SERVER['SCRIPT_NAME']) === 0) {
 } else {
 	$uri = $requestUri;
 }
+
+/**
+ * 路由表
+ */
+$routes = [
+	'/' => fn() => (function() use ($rootDir) {
+		$res = new Response();
+		$res->header('Content-Type: text/html; charset=utf-8');
+		$res->cache(3600);
+		$res->body = '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>Hello</title><link href="https://guguan.us.kg/dark.css" rel="stylesheet" media="(prefers-color-scheme: dark)"><script src="https://guguan.us.kg/tracking.js" async></script><meta name="viewport" content="width=device-width, initial-scale=1.0"></head><body><p>Hello world</p></body></html>';
+		return $res;
+	})(),
+
+	'/info' => fn() => (function() {
+		$res = new Response();
+		$res->header('Content-Type: text/html; charset=utf-8');
+		$res->cache(3600);
+		$res->body = '<br/>Your server uses PHP version ' . phpversion() . PHP_EOL . '</br></br>Your website url is ' . $_SERVER['HTTP_HOST']. '<br/> <br/>Your document root is ' . $_SERVER['DOCUMENT_ROOT'] . '<br/><br/>PHP memory_limit is ' . ini_get('memory_limit') . '<br/><br/>PHP max_file_size is ' . ini_get('upload_max_filesize') . 'B<br/><br/>PHP max_execution_time is ' . ini_get('max_execution_time') . ' seconds<link href="https://guguan.us.kg/dark.css" rel="stylesheet" media="(prefers-color-scheme: dark)"><script src="https://guguan.us.kg/tracking.js" async></script>';
+		return $res;
+	})(),
+
+	'/health' => fn() => (function() {
+		if (empty($dbh)) {
+			$result = true;
+		} else {
+			try {
+				$result = $dbh->query("SELECT 1")->fetchColumn() == 1;
+			} catch (\PDOException $e) {
+				$result = false;
+			}
+		}
+		$res = new Response();
+		if (!$result) $res->status = 503;
+		$res->header('Content-Type: application/json; charset=utf-8');
+		$res->header('Access-Control-Allow-Origin: *');
+		$res->header('Access-Control-Allow-Methods: GET');
+		$res->cache(10);
+		$res->body = json_encode(array('status' => $result ? 'ok' : 'error', 'ts' => (new DateTimeImmutable)->format('c')));
+		return $res;
+	})()
+];
+
 
 /**
  * 统一响应上下文
@@ -49,39 +99,6 @@ class Response {
 		$this->sent = true;
 	}
 }
-
-
-/**
- * 路由表
- */
-$routes = [
-	'/' => fn() => (function() use ($rootDir) {
-		$res = new Response();
-		$res->header('Content-Type: text/html; charset=utf-8');
-		$res->cache(3600);
-		$res->body = '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>Hello</title><link href="https://guguan.us.kg/dark.css" rel="stylesheet" media="(prefers-color-scheme: dark)"><script src="https://guguan.us.kg/tracking.js" async></script><meta name="viewport" content="width=device-width, initial-scale=1.0"></head><body><p>Hello world</p></body></html>';
-		return $res;
-	})(),
-
-	'/info' => fn() => (function() {
-		$res = new Response();
-		$res->header('Content-Type: text/html; charset=utf-8');
-		$res->cache(3600);
-		$res->body = '<br/>Your server uses PHP version ' . phpversion() . PHP_EOL . '</br></br>Your website url is ' . $_SERVER['HTTP_HOST']. '<br/> <br/>Your document root is ' . $_SERVER['DOCUMENT_ROOT'] . '<br/><br/>PHP memory_limit is ' . ini_get('memory_limit') . '<br/><br/>PHP max_file_size is ' . ini_get('upload_max_filesize') . 'B<br/><br/>PHP max_execution_time is ' . ini_get('max_execution_time') . ' seconds<link href="https://guguan.us.kg/dark.css" rel="stylesheet" media="(prefers-color-scheme: dark)"><script src="https://guguan.us.kg/tracking.js" async></script>';
-		return $res;
-	})(),
-
-	'/health' => fn() => (function() {
-		$res = new Response();
-		$res->header('Content-Type: application/json; charset=utf-8');
-		$res->header('Access-Control-Allow-Origin: *');
-		$res->header('Access-Control-Allow-Methods: GET');
-		$res->cache(0);
-		$res->body = json_encode(array('status' => 'ok', 'ts' => (new DateTimeImmutable)->format('c')));
-		return $res;
-	})()
-];
-
 
 /**
  * 文件路由：自动注册为闭包
