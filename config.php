@@ -12,7 +12,8 @@ return [
 			$res = new Response();
 			$res->header('Content-Type: text/plain; charset=utf-8');
 			$res->cache(30);
-			$res->body = 'This is a function'
+			$res->body = 'This is a function';
+			return $res;
 		},
 		'/string' => 'This is a string',
 		'/null' => null
