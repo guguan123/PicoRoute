@@ -16,13 +16,8 @@ RewriteRule . /index.php [L]
 $requestUri = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
 $rootDir = __DIR__;
 
-try {
-	//$dbh = new \PDO('mysql:host=localhost;dbname=database_name', 'user_name', 'Password123', [\PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION]);
-} catch (\PDOException $e) {
-	error_log(" [Database Error] " . $e->getMessage());
-	http_response_code(503);
-	die("Database Error");
-}
+$config_file = $rootDir . '/config.php';
+if (file_exists($config_file)) $config = require $config_file : [];
 
 // 如果请求路径以脚本名开头，则去除脚本名部分
 if (strpos($requestUri, $_SERVER['SCRIPT_NAME']) === 0) {
@@ -35,47 +30,15 @@ if (strpos($requestUri, $_SERVER['SCRIPT_NAME']) === 0) {
 	$uri = $requestUri;
 }
 
-/**
- * 路由表
- */
-$routes = [
-	'/' => fn() => (function() use ($rootDir) {
-		$res = new Response();
-		$res->header('Content-Type: text/html; charset=utf-8');
-		$res->cache(3600);
-		$res->body = '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>Hello</title><link href="https://guguan.us.kg/dark.css" rel="stylesheet" media="(prefers-color-scheme: dark)"><script src="https://guguan.us.kg/tracking.js" async></script><meta name="viewport" content="width=device-width, initial-scale=1.0"></head><body><p>Hello world</p></body></html>';
-		return $res;
-	})(),
-
-	'/info' => fn() => (function() {
-		$res = new Response();
-		$res->header('Content-Type: text/html; charset=utf-8');
-		$res->cache(3600);
-		$res->body = '<br/>Your server uses PHP version ' . phpversion() . PHP_EOL . '</br></br>Your website url is ' . $_SERVER['HTTP_HOST']. '<br/> <br/>Your document root is ' . $_SERVER['DOCUMENT_ROOT'] . '<br/><br/>PHP memory_limit is ' . ini_get('memory_limit') . '<br/><br/>PHP max_file_size is ' . ini_get('upload_max_filesize') . 'B<br/><br/>PHP max_execution_time is ' . ini_get('max_execution_time') . ' seconds<link href="https://guguan.us.kg/dark.css" rel="stylesheet" media="(prefers-color-scheme: dark)"><script src="https://guguan.us.kg/tracking.js" async></script>';
-		return $res;
-	})(),
-
-	'/health' => fn() => (function() {
-		if (empty($dbh)) {
-			$result = true;
-		} else {
-			try {
-				$result = $dbh->query("SELECT 1")->fetchColumn() == 1;
-			} catch (\PDOException $e) {
-				$result = false;
-			}
-		}
-		$res = new Response();
-		if (!$result) $res->status = 503;
-		$res->header('Content-Type: application/json; charset=utf-8');
-		$res->header('Access-Control-Allow-Origin: *');
-		$res->header('Access-Control-Allow-Methods: GET');
-		$res->cache(10);
-		$res->body = json_encode(array('status' => $result ? 'ok' : 'error', 'ts' => (new DateTimeImmutable)->format('c')));
-		return $res;
-	})()
-];
-
+if (empty($config['db']['dsn'])) {
+	$dbh = null;
+} else try {
+	$dbh = new \PDO($config['db']['dsn'], $config['db']['user'], $config['db']['pass'], $config['db']['options'] ?? array());
+} catch (\PDOException $e) {
+	error_log('[Database Error] ' . $e->getMessage());
+	http_response_code(503);
+	die("Database Error");
+}
 
 /**
  * 统一响应上下文
@@ -99,6 +62,50 @@ class Response {
 		$this->sent = true;
 	}
 }
+
+/**
+ * 路由表
+ */
+$routes = [
+	'/' => fn() => (function() use ($rootDir) {
+		$res = new Response();
+		$res->header('Content-Type: text/html; charset=utf-8');
+		$res->cache(3600);
+		$res->body = '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>Hello</title><link href="https://guguan.us.kg/dark.css" rel="stylesheet" media="(prefers-color-scheme: dark)"><script src="https://guguan.us.kg/tracking.js" async></script><meta name="viewport" content="width=device-width, initial-scale=1.0"></head><body><p>Hello world</p></body></html>';
+		return $res;
+	})(),
+
+	'/info' => fn() => (function() {
+		$res = new Response();
+		$res->header('Content-Type: text/html; charset=utf-8');
+		$res->cache(3600);
+		$res->body = '<br/>Your server uses PHP version ' . phpversion() . PHP_EOL . '</br></br>Your website url is ' . $_SERVER['HTTP_HOST']. '<br/> <br/>Your document root is ' . $_SERVER['DOCUMENT_ROOT'] . '<br/><br/>PHP memory_limit is ' . ini_get('memory_limit') . '<br/><br/>PHP max_file_size is ' . ini_get('upload_max_filesize') . 'B<br/><br/>PHP max_execution_time is ' . ini_get('max_execution_time') . ' seconds<link href="https://guguan.us.kg/dark.css" rel="stylesheet" media="(prefers-color-scheme: dark)"><script src="https://guguan.us.kg/tracking.js" async></script>';
+		return $res;
+	})(),
+
+	'/health' => fn() => (function() use ($dbh) {
+		if (empty($dbh)) {
+			$result = true;
+		} else {
+			try {
+				$result = $dbh->query("SELECT 1")->fetchColumn() == 1;
+			} catch (\PDOException $e) {
+				$result = false;
+			}
+		}
+		$res = new Response();
+		if (!$result) $res->status = 503;
+		$res->header('Content-Type: application/json; charset=utf-8');
+		$res->header('Access-Control-Allow-Origin: *');
+		$res->header('Access-Control-Allow-Methods: GET');
+		$res->cache(10);
+		$res->body = json_encode(array('status' => $result ? 'ok' : 'error', 'ts' => (new DateTimeImmutable)->format('c')));
+		return $res;
+	})()
+];
+
+// 合并路由表
+if (isset($config['routes']) && is_array($config['routes'])) $routes = array_merge($routes, $config['routes']);
 
 /**
  * 文件路由：自动注册为闭包
@@ -168,27 +175,39 @@ if (empty($routes[$uri]) && $realpath !== false && is_file($realpath) && strtolo
 // HSTS
 header('Strict-Transport-Security: max-age=31536000');
 
-
+// 执行路由
 if (isset($routes[$uri])) {
-	// 执行路由
-	$res = $routes[$uri]();
-
-	// 缓存头
-	if ($res->cache > 0) {
-		$res->header("Cache-Control: public, max-age={$res->cache}");
-		$res->header("Expires: " . gmdate('D, d M Y H:i:s', time() + $res->cache) . ' GMT');
-		$res->header("Pragma: cache");
-	} elseif ($res->cache === 0) {
-		$res->header("Cache-Control: no-cache, no-store");
-		$res->header("Expires: 0");
-		$res->header("Pragma: no-cache");
-	}
-
+	$raw = is_callable($routes[$uri]) ? $routes[$uri]() : $routes[$uri];
+} else {
+	// 没找到路由或者返回为空
+	$raw = new Response();
+	$raw->status = 404;
+	$raw->body = 'Not Found';
+}
+if (is_null($raw)) {
+	$res = new Response();
+	$res->status = 204;
+} elseif ($raw instanceof Response) {
+	$res = $raw;
+} elseif (is_string($raw)) {
+	// 字符串自动包装
+	$res = new Response();
+	$res->body = $raw;
 } else {
 	$res = new Response();
-	$res->status = 404;
-	$res->header('Content-Type: text/plain; charset=utf-8');
-	$res->body = 'Not Found';
+	$res->status = 503;
+	$res->body = 'Invalid Route Return';
+}
+
+// 缓存头
+if ($res->cache > 0) {
+	$res->header("Cache-Control: public, max-age={$res->cache}");
+	$res->header("Expires: " . gmdate('D, d M Y H:i:s', time() + $res->cache) . ' GMT');
+	$res->header("Pragma: cache");
+} elseif ($res->cache === 0) {
+	$res->header("Cache-Control: no-cache, no-store");
+	$res->header("Expires: 0");
+	$res->header("Pragma: no-cache");
 }
 
 // 发送
