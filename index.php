@@ -13,27 +13,27 @@ RewriteRule \.php$ - [L]
 RewriteRule . /index.php [L]
 */
 
-$requestUri = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
-$rootDir = __DIR__;
+$pr_requestUri = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
+$pr_rootDir = __DIR__;
 
-$config_file = $rootDir . '/config.php';
-if (file_exists($config_file)) $config = require $config_file;
+$pr_config_file = $pr_rootDir . '/config.php';
+if (file_exists($pr_config_file)) $pr_config = require $pr_config_file;
 
 // 如果请求路径以脚本名开头，则去除脚本名部分
-if (strpos($requestUri, $_SERVER['SCRIPT_NAME']) === 0) {
-	if ($requestUri == $_SERVER['SCRIPT_NAME']) {
-		$uri = '/';
+if (strpos($pr_requestUri, $_SERVER['SCRIPT_NAME']) === 0) {
+	if ($pr_requestUri == $_SERVER['SCRIPT_NAME']) {
+		$pr_uri = '/';
 	} else {
-		$uri = substr($requestUri, strlen($_SERVER['SCRIPT_NAME']));
+		$pr_uri = substr($pr_requestUri, strlen($_SERVER['SCRIPT_NAME']));
 	}
 } else {
-	$uri = $requestUri;
+	$pr_uri = $pr_requestUri;
 }
 
-if (empty($config['db']['dsn'])) {
-	$dbh = null;
+if (empty($pr_config['db']['dsn'])) {
+	$pr_dbh = null;
 } else try {
-	$dbh = new \PDO($config['db']['dsn'], $config['db']['user'], $config['db']['pass'], $config['db']['options'] ?? array());
+	$pr_dbh = new \PDO($pr_config['db']['dsn'], $pr_config['db']['user'], $pr_config['db']['pass'], $pr_config['db']['options'] ?? array());
 } catch (\PDOException $e) {
 	error_log('[Database Error] ' . $e->getMessage());
 	http_response_code(503);
@@ -44,7 +44,7 @@ if (empty($config['db']['dsn'])) {
  * 统一响应上下文
  */
 class Response {
-	public int $status = 200;
+	public ?int $status = null;
 	public array $headers = [];
 	public $body;
 	public ?int $cache = null;
@@ -56,7 +56,7 @@ class Response {
 	public function etag(string $e) { $this->etag = $e; }
 	public function send() {
 		if ($this->sent) return;
-		http_response_code($this->status);
+		if ($this->status !== null) http_response_code($this->status);
 		foreach ($this->headers as $h) header($h);
 		if ($this->body !== null) echo $this->body;
 		$this->sent = true;
@@ -67,7 +67,7 @@ class Response {
  * 路由表
  */
 $routes = [
-	'/' => fn() => (function() use ($rootDir) {
+	'/' => fn() => (function() use ($pr_rootDir) {
 		$res = new Response();
 		$res->header('Content-Type: text/html; charset=utf-8');
 		$res->cache(3600);
@@ -83,12 +83,12 @@ $routes = [
 		return $res;
 	})(),
 
-	'/health' => fn() => (function() use ($dbh) {
-		if (empty($dbh)) {
+	'/health' => fn() => (function() use ($pr_dbh) {
+		if (empty($pr_dbh)) {
 			$result = true;
 		} else {
 			try {
-				$result = $dbh->query("SELECT 1")->fetchColumn() == 1;
+				$result = $pr_dbh->query("SELECT 1")->fetchColumn() == 1;
 			} catch (\PDOException $e) {
 				$result = false;
 			}
@@ -105,79 +105,87 @@ $routes = [
 ];
 
 // 合并路由表
-if (isset($config['routes']) && is_array($config['routes'])) $routes = array_merge($routes, $config['routes']);
+if (isset($pr_config['routes']) && is_array($pr_config['routes'])) $routes = array_merge($routes, $pr_config['routes']);
 
 /**
  * 文件路由：自动注册为闭包
  */
-$realpath = realpath($rootDir . $uri);
-if (empty($routes[$uri]) && $realpath !== false && is_file($realpath) && strtolower(pathinfo($realpath, PATHINFO_EXTENSION)) !== 'php') {
-	$routes[$uri] = fn() => (function() use ($realpath) {
-		$res = new Response();
-		$size = filesize($realpath);
-		$mtime = filemtime($realpath);
-		$etag = '"' . md5($realpath . $mtime) . '"';
+$pr_realpath = realpath($pr_rootDir . $pr_uri);
+if (empty($routes[$pr_uri]) && $pr_realpath !== false && is_file($pr_realpath)) {
+	if (strtolower(pathinfo($pr_realpath, PATHINFO_EXTENSION)) == 'php') {
+		$routes[$pr_uri] = fn() => (function() use ($pr_realpath) {
+			ob_start();
+			include $pr_realpath;
+			return ob_get_clean();
+		})();
+	} else {
+		$routes[$pr_uri] = fn() => (function() use ($pr_realpath) {
+			$res = new Response();
+			$size = filesize($pr_realpath);
+			$mtime = filemtime($pr_realpath);
+			$etag = '"' . md5($pr_realpath . $mtime) . '"';
 
-		$res->header('Content-Type: ' . ((new finfo(FILEINFO_MIME_TYPE))->file($realpath) ?: 'application/octet-stream'));
-		$res->header('Content-Length: ' . $size);
-		$res->header('Last-Modified: ' . gmdate('D, d M Y H:i:s', $mtime) . ' GMT');
-		$res->header('ETag: ' . $etag);
-		$res->header('Accept-Ranges: bytes');
-		$res->cache(4 * 3600);
-		$res->etag($etag);
+			$res->header('Content-Type: ' . ((new finfo(FILEINFO_MIME_TYPE))->file($pr_realpath) ?: 'application/octet-stream'));
+			$res->header('Content-Length: ' . $size);
+			$res->header('Last-Modified: ' . gmdate('D, d M Y H:i:s', $mtime) . ' GMT');
+			$res->header('ETag: ' . $etag);
+			$res->header('Accept-Ranges: bytes');
+			$res->cache(4 * 3600);
+			$res->etag($etag);
 
-		// 304 检查
-		if (
-			(@strtotime($_SERVER['HTTP_IF_MODIFIED_SINCE'] ?? '') === $mtime) ||
-			(trim($_SERVER['HTTP_IF_NONE_MATCH'] ?? '') === $etag)
-		) {
-			$res->status = 304;
+			// 304 检查
+			if (
+				(@strtotime($_SERVER['HTTP_IF_MODIFIED_SINCE'] ?? '') === $mtime) ||
+				(trim($_SERVER['HTTP_IF_NONE_MATCH'] ?? '') === $etag)
+			) {
+				$res->status = 304;
+				return $res;
+			}
+
+			// 断点续传
+			$start = 0;
+			$end = $size - 1;
+			if (isset($_SERVER['HTTP_RANGE'])) {
+				if (!preg_match('/bytes=(\d+)-(\d*)/', $_SERVER['HTTP_RANGE'], $m)) {
+					$res->status = 416;
+					return $res;
+				}
+				$start = (int)$m[1];
+				$end = $m[2] === '' ? $end : (int)$m[2];
+				if ($start > $end || $start >= $size || $end >= $size) {
+					$res->status = 416;
+					$res->header('Content-Range: bytes */' . $size);
+					return $res;
+				}
+				$res->status = 206;
+				$res->header('Content-Range: bytes ' . $start . '-' . $end . '/' . $size);
+				$res->header('Content-Length: ' . ($end - $start + 1));
+			}
+
+			// 流式输出
+			$fp = fopen($pr_realpath, 'rb');
+			if (!$fp) { $res->status = 500; return $res; }
+			fseek($fp, $start);
+			$left = $end - $start + 1;
+			ob_end_clean(); // 防止缓冲
+			while ($left > 0 && !feof($fp)) {
+				$chunk = min(8192, $left);
+				$res->body .= fread($fp, $chunk); // 累积或直接 echo
+				flush();
+				$left -= $chunk;
+			}
+			fclose($fp);
 			return $res;
-		}
-
-		// 断点续传
-		$start = 0;
-		$end = $size - 1;
-		if (isset($_SERVER['HTTP_RANGE'])) {
-			if (!preg_match('/bytes=(\d+)-(\d*)/', $_SERVER['HTTP_RANGE'], $m)) {
-				$res->status = 416;
-				return $res;
-			}
-			$start = (int)$m[1];
-			$end = $m[2] === '' ? $end : (int)$m[2];
-			if ($start > $end || $start >= $size || $end >= $size) {
-				$res->status = 416;
-				$res->header('Content-Range: bytes */' . $size);
-				return $res;
-			}
-			$res->status = 206;
-			$res->header('Content-Range: bytes ' . $start . '-' . $end . '/' . $size);
-			$res->header('Content-Length: ' . ($end - $start + 1));
-		}
-
-		// 流式输出
-		$fp = fopen($realpath, 'rb');
-		if (!$fp) { $res->status = 500; return $res; }
-		fseek($fp, $start);
-		$left = $end - $start + 1;
-		ob_end_clean(); // 防止缓冲
-		while ($left > 0 && !feof($fp)) {
-			$chunk = min(8192, $left);
-			$res->body .= fread($fp, $chunk); // 累积或直接 echo
-			flush();
-			$left -= $chunk;
-		}
-		fclose($fp);
-		return $res;
-	})();
+		})();
+	}
 }
 
 // HSTS
 header('Strict-Transport-Security: max-age=31536000');
 
 // 执行路由
-if (array_key_exists($uri, $routes)) {
-	$raw = is_callable($routes[$uri]) ? $routes[$uri]() : $routes[$uri];
+if (array_key_exists($pr_uri, $routes)) {
+	$raw = is_callable($routes[$pr_uri]) ? $routes[$pr_uri]() : $routes[$pr_uri];
 } else {
 	// 没找到路由或者返回为空
 	$raw = new Response();
@@ -203,10 +211,12 @@ if (is_null($raw)) {
 if ($res->cache > 0) {
 	$res->header("Cache-Control: public, max-age={$res->cache}");
 	$res->header("Expires: " . gmdate('D, d M Y H:i:s', time() + $res->cache) . ' GMT');
-	$res->header("Pragma: cache");
 } elseif ($res->cache === 0) {
-	$res->header("Cache-Control: no-cache, no-store");
+	$res->header("Cache-Control: no-cache");
 	$res->header("Expires: 0");
+	$res->header("Pragma: no-cache");
+} elseif ($res->cache < 0) {
+	$res->header("Cache-Control: no-store");
 	$res->header("Pragma: no-cache");
 }
 

@@ -8,8 +8,9 @@ return [
 		'options' => array(\PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION)
 	],
 	'routes' => [
-		'/function' => function() use ($dbh) {
+		'/function' => function() use ($pr_dbh) {
 			$res = new Response();
+			$res->status = 200;
 			$res->header('Content-Type: text/plain; charset=utf-8');
 			$res->cache(30);
 			$res->body = 'This is a function';
