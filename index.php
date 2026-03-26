@@ -176,7 +176,7 @@ if (empty($routes[$uri]) && $realpath !== false && is_file($realpath) && strtolo
 header('Strict-Transport-Security: max-age=31536000');
 
 // 执行路由
-if (isset($routes[$uri])) {
+if (array_key_exists($uri, $routes)) {
 	$raw = is_callable($routes[$uri]) ? $routes[$uri]() : $routes[$uri];
 } else {
 	// 没找到路由或者返回为空
