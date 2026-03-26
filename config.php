@@ -1,7 +1,7 @@
 <?php
 // config.php
 return [
-	'db' => [
+	'db-example' => [
 		'dsn' => 'mysql:host=localhost;dbname=database_name',
 		'user' => 'user_name',
 		'pass' => 'Password123',
