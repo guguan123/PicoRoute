@@ -16,6 +16,6 @@ return [
 			return $res;
 		},
 		'/string' => 'This is a string',
-		'/null' => null
+		'/generate_204' => null
 	]
 ];
