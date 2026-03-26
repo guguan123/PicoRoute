@@ -17,7 +17,10 @@ return [
 			return $res;
 		},
 		'/string' => 'This is a string',
-		'/generate_204' => null
+		'/null' => null
+	],
+	'rewrite' => [
+		'/generate_204' => '/null'
 	],
 	'headers' => [
 		'/string' => ['aaaa: bbbb']

@@ -217,6 +217,9 @@ if (empty($routes[$pr_uri]) && $pr_realpath !== false && is_file($pr_realpath)) 
 // HSTS
 header('Strict-Transport-Security: max-age=31536000');
 
+// 处理 URL Rewrite
+if (isset($pr_config['rewrite']) && array_key_exists($pr_uri, $pr_config['rewrite'])) $pr_uri = $pr_config['rewrite'][$pr_uri]
+
 // 执行路由
 if (array_key_exists($pr_uri, $routes)) {
 	$raw = is_callable($routes[$pr_uri]) ? $routes[$pr_uri]() : $routes[$pr_uri];
@@ -241,7 +244,7 @@ if (is_null($raw)) {
 	$res->body = 'Invalid Route Return';
 }
 
-if (array_key_exists($pr_uri, $pr_config['headers']) && is_array($pr_config['headers'][$pr_uri])) foreach ($pr_config['headers'][$pr_uri] as $pr_header) $res->header($pr_header);
+if (isset($pr_config['headers']) && array_key_exists($pr_uri, $pr_config['headers']) && is_array($pr_config['headers'][$pr_uri])) foreach ($pr_config['headers'][$pr_uri] as $pr_header) $res->header($pr_header);
 
 // 缓存头
 if ($res->cache > 0) {
