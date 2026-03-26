@@ -18,5 +18,8 @@ return [
 		},
 		'/string' => 'This is a string',
 		'/generate_204' => null
+	],
+	'headers' => [
+		'/string' => ['aaaa: bbbb']
 	]
 ];
