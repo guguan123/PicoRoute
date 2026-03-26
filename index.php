@@ -218,7 +218,7 @@ if (empty($routes[$pr_uri]) && $pr_realpath !== false && is_file($pr_realpath)) 
 header('Strict-Transport-Security: max-age=31536000');
 
 // 处理 URL Rewrite
-if (isset($pr_config['rewrite']) && array_key_exists($pr_uri, $pr_config['rewrite'])) $pr_uri = $pr_config['rewrite'][$pr_uri]
+if (isset($pr_config['rewrite']) && array_key_exists($pr_uri, $pr_config['rewrite'])) $pr_uri = $pr_config['rewrite'][$pr_uri];
 
 // 执行路由
 if (array_key_exists($pr_uri, $routes)) {
