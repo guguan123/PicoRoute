@@ -17,7 +17,7 @@ $requestUri = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
 $rootDir = __DIR__;
 
 $config_file = $rootDir . '/config.php';
-if (file_exists($config_file)) $config = require $config_file : [];
+if (file_exists($config_file)) $config = require $config_file;
 
 // 如果请求路径以脚本名开头，则去除脚本名部分
 if (strpos($requestUri, $_SERVER['SCRIPT_NAME']) === 0) {
