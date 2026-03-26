@@ -32,21 +32,21 @@ if (file_exists($pr_config_file)) {
 	$pr_config = require $pr_config_file;
 
 	// 粗略检查配置文件
-	function () use ($pr_config) {
+	(function () use ($pr_config) {
 		// 定义期望的结构：key => 期望的类型
 		foreach ([
 			'db'      => 'is_array',
 			'routes'  => 'is_array',
 			'headers' => 'is_array',
 		] as $key => $checkFunc) {
-			if (isset($pr_config[$key]) && !$checkFunc($pr_config[$key])) {
+			if (array_key_exists($key, $pr_config) && !$checkFunc($pr_config[$key])) {
 				// 这里的报错信息也可以动态生成了喵！
 				error_log("[Config Error] $key is not valid");
 				http_response_code(503);
 				die("Config Error: $key");
 			}
 		}
-	}();
+	})();
 }
 
 if (empty($pr_config['db']['dsn'])) {
